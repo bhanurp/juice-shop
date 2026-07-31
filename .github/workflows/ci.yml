@@ -385,9 +385,9 @@ jobs:
           JFROG_IMAGE="$JFROG_REGISTRY/${{ env.JFROG_DOCKER_REPO }}/juice-shop:${{ env.DOCKER_TAG }}"
           jf docker login "$JFROG_REGISTRY"
           jf docker build -t "$JFROG_IMAGE" \
-            --build-arg VCS_REF=${{ env.VCS_REF }} \
-            --build-arg BUILD_DATE=${{ env.BUILD_DATE }} \
-            --build-arg CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }} \
+            --build-arg "VCS_REF=${{ env.VCS_REF }}" \
+            --build-arg "BUILD_DATE=${{ env.BUILD_DATE }}" \
+            --build-arg "CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }}" \
             .
           jf docker push "$JFROG_IMAGE"
   heroku:
