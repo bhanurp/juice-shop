@@ -45,8 +45,6 @@ jobs:
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
         with:
           version: 2.117.0
-          enable-package-alias: true
-          package-alias-tools: npm
       - name: "Configure npm resolution for JFrog CLI"
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         run: jf npm-config --repo-resolve=${{ env.JFROG_NPM_REPO_RESOLVE }}
@@ -68,18 +66,24 @@ jobs:
           echo "PCKG_NODE_VERSION=${{ matrix.node-version }}" >> $GITHUB_ENV
         shell: bash
       - name: "Package application"
+        if: "!(matrix.os == 'ubuntu-latest' && matrix.node-version == 24)"
+        run: |
+          npm install --production
+          npm run package:ci
+      - name: "Package application with build-info"
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         env:
           JFROG_CLI_BUILD_NAME: juice-shop-npm
           JFROG_CLI_BUILD_NUMBER: ${{ github.ref_name }}
         run: |
-          npm install --production
+          jf npm install --production
           npm run package:ci
-      - name: "Upload packaged archive to Artifactory and publish build-info"
+      - name: "Upload packaged archive to Artifactory"
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: |
-          jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/
-          jf rt build-add-git juice-shop-npm ${{ github.ref_name }}
-          jf rt build-publish juice-shop-npm ${{ github.ref_name }}
+        env:
+          JFROG_CLI_BUILD_NAME: juice-shop-npm
+          JFROG_CLI_BUILD_NUMBER: ${{ github.ref_name }}
+        run: jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/ --build-name=juice-shop-npm --build-number=${{ github.ref_name }}
       - name: 'Attach packaged archive to tag release'
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 #v2.2.2
         with:
@@ -99,8 +103,6 @@ jobs:
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
         with:
           version: 2.117.0
-          enable-package-alias: true
-          package-alias-tools: docker
       - name: "Set up QEMU"
         uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf #v3.2.0
       - name: "Set up Docker Buildx"
@@ -138,15 +140,13 @@ jobs:
         run: |
           JFROG_REGISTRY="$(echo "$JF_URL" | sed -E 's#^https?://##; s#/$##')"
           JFROG_IMAGE="$JFROG_REGISTRY/${{ env.JFROG_DOCKER_REPO }}/juice-shop:${{ steps.tag.outputs.tag }}"
-          docker login "$JFROG_REGISTRY"
-          docker build -t "$JFROG_IMAGE" \
+          jf docker login "$JFROG_REGISTRY"
+          jf docker build -t "$JFROG_IMAGE" \
             --build-arg VCS_REF=${{ env.VCS_REF }} \
             --build-arg BUILD_DATE=${{ env.BUILD_DATE }} \
             --build-arg CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }} \
             .
-          docker push "$JFROG_IMAGE" --build-name=juice-shop-docker --build-number=${{ steps.tag.outputs.tag }}
-          jf rt build-add-git juice-shop-docker ${{ steps.tag.outputs.tag }}
-          jf rt build-publish juice-shop-docker ${{ steps.tag.outputs.tag }}
+          jf docker push "$JFROG_IMAGE" --build-name=juice-shop-docker --build-number=${{ steps.tag.outputs.tag }}
   notify-slack:
     if: always()
     needs:
