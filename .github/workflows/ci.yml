@@ -386,19 +386,25 @@ jobs:
             VCS_REF=${{ env.VCS_REF }}
             BUILD_DATE=${{ env.BUILD_DATE }}
             CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }}
+      - name: "Enable native package alias for JFrog CLI Docker"
+        run: |
+          jf package-alias install --packages=docker
+          echo "$HOME/.jfrog/package-alias/bin" >> $GITHUB_PATH
+          echo "JFROG_CLI_GHOST_FROG=true" >> $GITHUB_ENV
+          echo "JFROG_RUN_NATIVE=true" >> $GITHUB_ENV
       - name: "Build and push single-arch image to Artifactory for build-info"
         env:
           JF_URL: ${{ secrets.JF_URL }}
         run: |
           JFROG_REGISTRY="$(echo "$JF_URL" | sed -E 's#^https?://##; s#/$##')"
           JFROG_IMAGE="$JFROG_REGISTRY/${{ env.JFROG_DOCKER_REPO }}/juice-shop:${{ env.DOCKER_TAG }}"
-          jf docker login "$JFROG_REGISTRY"
-          jf docker build -t "$JFROG_IMAGE" \
+          docker login "$JFROG_REGISTRY"
+          docker build -t "$JFROG_IMAGE" \
             --build-arg "VCS_REF=${{ env.VCS_REF }}" \
             --build-arg "BUILD_DATE=${{ env.BUILD_DATE }}" \
             --build-arg "CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }}" \
             .
-          jf docker push "$JFROG_IMAGE"
+          docker push "$JFROG_IMAGE"
   heroku:
     if: github.repository == 'juice-shop/juice-shop' && github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master')
     needs: [frontend-test, server-test, api-test, e2e-test, custom-config-test]
