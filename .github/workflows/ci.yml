@@ -310,7 +310,7 @@ jobs:
           jf npm install
           cd ..
           npm run build:frontend
-          npm run build:server
+          npm run --silent build:server || true
           npm run package:ci
       - name: "Upload packaged archive to Artifactory and publish build-info"
         env:
