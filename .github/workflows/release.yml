@@ -74,6 +74,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         run: |
           jf npm install --production --ignore-scripts
+          npm rebuild sqlite3
           cd frontend
           jf npm install
           cd ..
