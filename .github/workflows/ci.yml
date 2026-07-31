@@ -305,7 +305,12 @@ jobs:
           JFROG_CLI_BUILD_NAME: juice-shop-npm
           JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          jf npm install --production
+          jf npm install --production --ignore-scripts
+          cd frontend
+          jf npm install
+          cd ..
+          npm run build:frontend
+          npm run build:server
           npm run package:ci
       - name: "Upload packaged archive to Artifactory and publish build-info"
         env:
