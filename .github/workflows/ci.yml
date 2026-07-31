@@ -286,12 +286,12 @@ jobs:
         env:
           JF_URL: ${{ secrets.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
-      - name: "Configure npm resolution and enable JFrog CLI package alias"
-        run: |
-          jf npm-config --repo-resolve=${{ env.JFROG_NPM_REPO_RESOLVE }}
-          jf package-alias install --packages=npm
-          echo "$HOME/.jfrog/package-alias/bin" >> $GITHUB_PATH
-          echo "JFROG_CLI_GHOST_FROG=true" >> $GITHUB_ENV
+        with:
+          version: 2.117.0
+          enable-package-alias: true
+          package-alias-tools: npm
+      - name: "Configure npm resolution for JFrog CLI"
+        run: jf npm-config --repo-resolve=${{ env.JFROG_NPM_REPO_RESOLVE }}
       - name: "Install CLI tools"
         run: |
           npm install -g typescript@${{ env.TYPESCRIPT_VERSION }}
@@ -310,8 +310,11 @@ jobs:
           npm install --production
           npm run package:ci
       - name: "Upload packaged archive to Artifactory and publish build-info"
+        env:
+          JFROG_CLI_BUILD_NAME: juice-shop-npm
+          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/
+          jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/ --build-name=juice-shop-npm --build-number=${{ github.run_number }}
           jf rt build-add-git juice-shop-npm ${{ github.run_number }}
           jf rt build-publish juice-shop-npm ${{ github.run_number }}
       - name: "Unpack application archive"
@@ -344,11 +347,10 @@ jobs:
         env:
           JF_URL: ${{ secrets.JF_URL }}
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
-      - name: "Enable JFrog CLI package alias for Docker"
-        run: |
-          jf package-alias install --packages=docker
-          echo "$HOME/.jfrog/package-alias/bin" >> $GITHUB_PATH
-          echo "JFROG_CLI_GHOST_FROG=true" >> $GITHUB_ENV
+        with:
+          version: 2.117.0
+          enable-package-alias: true
+          package-alias-tools: docker
       - name: "Set up QEMU"
         uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf #v3.2.0
       - name: "Set up Docker Buildx"
@@ -388,12 +390,13 @@ jobs:
         run: |
           JFROG_REGISTRY="$(echo "$JF_URL" | sed -E 's#^https?://##; s#/$##')"
           JFROG_IMAGE="$JFROG_REGISTRY/${{ env.JFROG_DOCKER_REPO }}/juice-shop:${{ env.DOCKER_TAG }}"
+          docker login "$JFROG_REGISTRY"
           docker build -t "$JFROG_IMAGE" \
             --build-arg VCS_REF=${{ env.VCS_REF }} \
             --build-arg BUILD_DATE=${{ env.BUILD_DATE }} \
             --build-arg CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }} \
             .
-          docker push "$JFROG_IMAGE"
+          docker push "$JFROG_IMAGE" --build-name=juice-shop-docker --build-number=${{ github.run_number }}
           jf rt build-add-git juice-shop-docker ${{ github.run_number }}
           jf rt build-publish juice-shop-docker ${{ github.run_number }}
   heroku:
