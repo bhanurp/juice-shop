@@ -45,9 +45,24 @@ jobs:
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
         with:
           version: 2.117.0
-      - name: "Configure npm resolution for JFrog CLI"
+      - name: "Configure persistent npm auth and enable native package alias"
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: jf npm-config --repo-resolve=${{ env.JFROG_NPM_REPO_RESOLVE }}
+        env:
+          JF_URL: ${{ secrets.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+        run: |
+          NPM_REGISTRY="${JF_URL%/}/artifactory/api/npm/${{ env.JFROG_NPM_REPO_RESOLVE }}/"
+          NPM_REGISTRY_HOST="$(echo "$NPM_REGISTRY" | sed -E 's#^https?://##')"
+          for dir in . frontend; do
+            {
+              echo "registry=$NPM_REGISTRY"
+              echo "//$NPM_REGISTRY_HOST:_authToken=$JF_ACCESS_TOKEN"
+            } > "$dir/.npmrc"
+          done
+          jf package-alias install --packages=npm
+          echo "$HOME/.jfrog/package-alias/bin" >> $GITHUB_PATH
+          echo "JFROG_CLI_GHOST_FROG=true" >> $GITHUB_ENV
+          echo "JFROG_RUN_NATIVE=true" >> $GITHUB_ENV
       - name: "Install CLI tools"
         run: |
           npm install -g typescript@${{ env.TYPESCRIPT_VERSION }}
@@ -66,20 +81,8 @@ jobs:
           echo "PCKG_NODE_VERSION=${{ matrix.node-version }}" >> $GITHUB_ENV
         shell: bash
       - name: "Package application"
-        if: "!(matrix.os == 'ubuntu-latest' && matrix.node-version == 24)"
         run: |
           npm install --production
-          npm run package:ci
-      - name: "Package application with build-info"
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: |
-          jf npm install --production --ignore-scripts
-          npm rebuild sqlite3
-          cd frontend
-          jf npm install
-          cd ..
-          npm run build:frontend
-          npm run --silent build:server || true
           npm run package:ci
       - name: "Upload packaged archive to Artifactory"
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
