@@ -21,6 +21,10 @@ env:
   NODE_DEFAULT_VERSION: 24
   NODE_OPTIONS: "--max_old_space_size=4096"
   CYCLONEDX_NPM_VERSION: '^2.0.0||^3.0.0||^4.0.0'   # keep in sync with package.json
+  # Placeholder Artifactory repos - a maintainer must create these and set the JF_URL/JF_ACCESS_TOKEN secrets
+  JFROG_NPM_REPO_RESOLVE: juice-shop-npm-virtual
+  JFROG_NPM_REPO_DEPLOY: juice-shop-npm-local
+  JFROG_DOCKER_REPO: juice-shop-docker-local
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -277,6 +281,17 @@ jobs:
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af #v4.1.0
         with:
           node-version: ${{ env.NODE_DEFAULT_VERSION }}
+      - name: "Setup JFrog CLI"
+        uses: jfrog/setup-jfrog-cli@deda456d982fc5e9a7a020b63eb0d2968aedd33e #v5.1.0
+        env:
+          JF_URL: ${{ secrets.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+      - name: "Configure npm resolution and enable JFrog CLI package alias"
+        run: |
+          jf npm-config --repo-resolve=${{ env.JFROG_NPM_REPO_RESOLVE }}
+          jf package-alias install --packages=npm
+          echo "$HOME/.jfrog/package-alias/bin" >> $GITHUB_PATH
+          echo "JFROG_CLI_GHOST_FROG=true" >> $GITHUB_ENV
       - name: "Install CLI tools"
         run: |
           npm install -g typescript@${{ env.TYPESCRIPT_VERSION }}
@@ -288,9 +303,17 @@ jobs:
           echo "PCKG_NODE_VERSION=24" >> $GITHUB_ENV
           echo "PCKG_CPU_ARCH=x64" >> $GITHUB_ENV
       - name: "Package application"
+        env:
+          JFROG_CLI_BUILD_NAME: juice-shop-npm
+          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
           npm install --production
           npm run package:ci
+      - name: "Upload packaged archive to Artifactory and publish build-info"
+        run: |
+          jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/
+          jf rt build-add-git juice-shop-npm ${{ github.run_number }}
+          jf rt build-publish juice-shop-npm ${{ github.run_number }}
       - name: "Unpack application archive"
         run: |
           cd dist
@@ -316,6 +339,16 @@ jobs:
     steps:
       - name: "Check out Git repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
+      - name: "Setup JFrog CLI"
+        uses: jfrog/setup-jfrog-cli@deda456d982fc5e9a7a020b63eb0d2968aedd33e #v5.1.0
+        env:
+          JF_URL: ${{ secrets.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+      - name: "Enable JFrog CLI package alias for Docker"
+        run: |
+          jf package-alias install --packages=docker
+          echo "$HOME/.jfrog/package-alias/bin" >> $GITHUB_PATH
+          echo "JFROG_CLI_GHOST_FROG=true" >> $GITHUB_ENV
       - name: "Set up QEMU"
         uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf #v3.2.0
       - name: "Set up Docker Buildx"
@@ -347,6 +380,22 @@ jobs:
             VCS_REF=${{ env.VCS_REF }}
             BUILD_DATE=${{ env.BUILD_DATE }}
             CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }}
+      - name: "Build and push single-arch image to Artifactory for build-info"
+        env:
+          JF_URL: ${{ secrets.JF_URL }}
+          JFROG_CLI_BUILD_NAME: juice-shop-docker
+          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          JFROG_REGISTRY="$(echo "$JF_URL" | sed -E 's#^https?://##; s#/$##')"
+          JFROG_IMAGE="$JFROG_REGISTRY/${{ env.JFROG_DOCKER_REPO }}/juice-shop:${{ env.DOCKER_TAG }}"
+          docker build -t "$JFROG_IMAGE" \
+            --build-arg VCS_REF=${{ env.VCS_REF }} \
+            --build-arg BUILD_DATE=${{ env.BUILD_DATE }} \
+            --build-arg CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }} \
+            .
+          docker push "$JFROG_IMAGE"
+          jf rt build-add-git juice-shop-docker ${{ github.run_number }}
+          jf rt build-publish juice-shop-docker ${{ github.run_number }}
   heroku:
     if: github.repository == 'juice-shop/juice-shop' && github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master')
     needs: [frontend-test, server-test, api-test, e2e-test, custom-config-test]
