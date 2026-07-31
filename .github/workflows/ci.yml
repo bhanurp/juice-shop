@@ -308,8 +308,6 @@ jobs:
           echo "JFROG_CLI_GHOST_FROG=true" >> $GITHUB_ENV
           echo "JFROG_RUN_NATIVE=true" >> $GITHUB_ENV
       - name: "Install CLI tools"
-        env:
-          JFROG_CLI_GHOST_FROG: "false"
         run: |
           npm install -g typescript@${{ env.TYPESCRIPT_VERSION }}
           npm install -g @cyclonedx/cyclonedx-npm@$CYCLONEDX_NPM_VERSION
