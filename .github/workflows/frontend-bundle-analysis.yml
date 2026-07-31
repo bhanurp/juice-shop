@@ -50,6 +50,9 @@ jobs:
           jf npm install --ignore-scripts
           npm run build
 
+      - name: "Publish frontend dependency build-info"
+        run: jf rt build-publish juice-shop-frontend-bundle-analysis ${{ github.run_number }}
+
       - name: "Generate bundle report"
         run: |
           cd frontend

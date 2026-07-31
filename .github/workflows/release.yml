@@ -78,12 +78,14 @@ jobs:
         run: |
           jf npm install --production
           npm run package:ci
-      - name: "Upload packaged archive to Artifactory"
+      - name: "Upload packaged archive to Artifactory and publish build-info"
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         env:
           JFROG_CLI_BUILD_NAME: juice-shop-npm
           JFROG_CLI_BUILD_NUMBER: ${{ github.ref_name }}
-        run: jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/ --build-name=juice-shop-npm --build-number=${{ github.ref_name }}
+        run: |
+          jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/ --build-name=juice-shop-npm --build-number=${{ github.ref_name }}
+          jf rt build-publish juice-shop-npm ${{ github.ref_name }}
       - name: 'Attach packaged archive to tag release'
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 #v2.2.2
         with:
@@ -147,6 +149,7 @@ jobs:
             --build-arg CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }} \
             .
           jf docker push "$JFROG_IMAGE" --build-name=juice-shop-docker --build-number=${{ steps.tag.outputs.tag }}
+          jf rt build-publish juice-shop-docker ${{ steps.tag.outputs.tag }}
   notify-slack:
     if: always()
     needs:
