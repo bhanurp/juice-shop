@@ -301,9 +301,6 @@ jobs:
           echo "PCKG_NODE_VERSION=24" >> $GITHUB_ENV
           echo "PCKG_CPU_ARCH=x64" >> $GITHUB_ENV
       - name: "Package application"
-        env:
-          JFROG_CLI_BUILD_NAME: juice-shop-npm
-          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
           jf npm install --production --ignore-scripts
           cd frontend
@@ -312,13 +309,8 @@ jobs:
           npm run build:frontend
           npm run --silent build:server || true
           npm run package:ci
-      - name: "Upload packaged archive to Artifactory and publish build-info"
-        env:
-          JFROG_CLI_BUILD_NAME: juice-shop-npm
-          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
-        run: |
-          jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/ --build-name=juice-shop-npm --build-number=${{ github.run_number }}
-          jf rt build-publish juice-shop-npm ${{ github.run_number }}
+      - name: "Upload packaged archive to Artifactory"
+        run: jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/
       - name: "Unpack application archive"
         run: |
           cd dist
@@ -385,8 +377,6 @@ jobs:
       - name: "Build and push single-arch image to Artifactory for build-info"
         env:
           JF_URL: ${{ secrets.JF_URL }}
-          JFROG_CLI_BUILD_NAME: juice-shop-docker
-          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
           JFROG_REGISTRY="$(echo "$JF_URL" | sed -E 's#^https?://##; s#/$##')"
           JFROG_IMAGE="$JFROG_REGISTRY/${{ env.JFROG_DOCKER_REPO }}/juice-shop:${{ env.DOCKER_TAG }}"
@@ -396,8 +386,7 @@ jobs:
             --build-arg BUILD_DATE=${{ env.BUILD_DATE }} \
             --build-arg CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }} \
             .
-          jf docker push "$JFROG_IMAGE" --build-name=juice-shop-docker --build-number=${{ github.run_number }}
-          jf rt build-publish juice-shop-docker ${{ github.run_number }}
+          jf docker push "$JFROG_IMAGE"
   heroku:
     if: github.repository == 'juice-shop/juice-shop' && github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master')
     needs: [frontend-test, server-test, api-test, e2e-test, custom-config-test]

@@ -72,9 +72,6 @@ jobs:
           npm run package:ci
       - name: "Package application with build-info"
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        env:
-          JFROG_CLI_BUILD_NAME: juice-shop-npm
-          JFROG_CLI_BUILD_NUMBER: ${{ github.ref_name }}
         run: |
           jf npm install --production --ignore-scripts
           cd frontend
@@ -83,14 +80,9 @@ jobs:
           npm run build:frontend
           npm run --silent build:server || true
           npm run package:ci
-      - name: "Upload packaged archive to Artifactory and publish build-info"
+      - name: "Upload packaged archive to Artifactory"
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        env:
-          JFROG_CLI_BUILD_NAME: juice-shop-npm
-          JFROG_CLI_BUILD_NUMBER: ${{ github.ref_name }}
-        run: |
-          jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/ --build-name=juice-shop-npm --build-number=${{ github.ref_name }}
-          jf rt build-publish juice-shop-npm ${{ github.ref_name }}
+        run: jf rt upload "dist/juice-shop-*.tgz" ${{ env.JFROG_NPM_REPO_DEPLOY }}/
       - name: 'Attach packaged archive to tag release'
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 #v2.2.2
         with:
@@ -142,8 +134,6 @@ jobs:
       - name: "Build and push single-arch image to Artifactory for build-info"
         env:
           JF_URL: ${{ secrets.JF_URL }}
-          JFROG_CLI_BUILD_NAME: juice-shop-docker
-          JFROG_CLI_BUILD_NUMBER: ${{ steps.tag.outputs.tag }}
         run: |
           JFROG_REGISTRY="$(echo "$JF_URL" | sed -E 's#^https?://##; s#/$##')"
           JFROG_IMAGE="$JFROG_REGISTRY/${{ env.JFROG_DOCKER_REPO }}/juice-shop:${{ steps.tag.outputs.tag }}"
@@ -153,8 +143,7 @@ jobs:
             --build-arg BUILD_DATE=${{ env.BUILD_DATE }} \
             --build-arg CYCLONEDX_NPM_VERSION=${{ env.CYCLONEDX_NPM_VERSION }} \
             .
-          jf docker push "$JFROG_IMAGE" --build-name=juice-shop-docker --build-number=${{ steps.tag.outputs.tag }}
-          jf rt build-publish juice-shop-docker ${{ steps.tag.outputs.tag }}
+          jf docker push "$JFROG_IMAGE"
   notify-slack:
     if: always()
     needs:
